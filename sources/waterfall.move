@@ -15,7 +15,9 @@ module waterfall::waterfall {
         /// Flow rate of the token/s.
         flow: u64,
         // Duration of the contract's existense in seconds.
-        duration: u64
+        duration: u64,
+        // Creation timestamp of the waterfall.
+        created_at: u64
     }
 
     /// Target object owned by the receiver. 
@@ -30,8 +32,11 @@ module waterfall::waterfall {
         coin: Coin<T>,
         flow: u64,
         duration: u64,
+        current_timestamp: u64, // Will be replaced by on-chain timestamp.
         ctx: &mut TxContext
     ){
+        assert!(flow >= 0 && duration >= 0, 1);
+
         let sender = tx_context::sender(ctx);
         let target_id = object::new(ctx);
         
@@ -40,21 +45,22 @@ module waterfall::waterfall {
             target: object::uid_to_inner(&target_id),
             balance: coin::into_balance(coin),
             flow: flow,
-            duration: duration
+            duration: duration,
+            created_at: current_timestamp
         };
 
         let target = Target<T>{
             id: target_id,
             source: object::id(&source)
         };
-
         transfer::transfer(source, sender);
         transfer::transfer(target, receiver);
     }
 
     public entry fun terminate_waterfall <T: key>(
         source_object: Source<T>,
-        current_timestamp: u64
+        current_timestamp: u64, // Will be replaced by on-chain timestamp.
+        ctx: &mut TxContext
     ){
         /*
         Unwrap source object and distrubute wrapped balance according to the current timestamp.
@@ -64,7 +70,14 @@ module waterfall::waterfall {
             target: target,
             balance: balance,
             flow: flow,
-            duration: duration
+            duration: duration,
+            created_at: created_at
         } = source_object;
+
+        assert!(current_timestamp >= created_at, 1);
+        let amount_flowed = (current_timestamp - created_at + 1) * flow;
+        
+        let coins_to_target = coin::take(&mut balance, amount_flowed, ctx);
+        transfer::transfer(coins_to_target, target);
     }
 }
